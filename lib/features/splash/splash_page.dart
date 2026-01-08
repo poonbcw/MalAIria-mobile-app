@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../routes/app_routes.dart';
+import '../dashboard/dashboard_page.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -13,9 +13,13 @@ class _SplashPageState extends State<SplashPage> {
   void initState() {
     super.initState();
 
-    // หน่วงเวลาเพื่อแสดง splash แล้วไป Dashboard
-    Future.delayed(const Duration(seconds: 2), () {
-      Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 800),
+          pageBuilder: (_, __, ___) => const DashboardPage(),
+        ),
+      );
     });
   }
 
@@ -24,27 +28,15 @@ class _SplashPageState extends State<SplashPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 🔵 HERO LOGO
-            Hero(
-              tag: 'app-logo',
-              child: Image.asset(
-                'assets/images/whiteLogo.png',
-                width: 120,
-              ),
+        child: Hero(
+          tag: 'app-logo',
+          child: Material(
+            color: Colors.transparent,
+            child: Image.asset(
+              'assets/images/whiteLogo.png',
+              width: 120,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'MalAIria',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

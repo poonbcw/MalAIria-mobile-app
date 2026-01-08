@@ -7,22 +7,69 @@ class BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      onTap: (index) {
-        if (index == 0) {
-          Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-        } else if (index == 1) {
-          Navigator.pushNamed(context, AppRoutes.upload);
-        } else {
-          Navigator.pushNamed(context, AppRoutes.login);
-        }
-      },
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-        BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Detect'),
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Login'),
-      ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return BottomAppBar(
+      shape: const CircularNotchedRectangle(),
+      notchMargin: 10,
+      elevation: 8,
+      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+
+      child: SizedBox(
+        height: 68,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _NavItem(
+              icon: Icons.home_rounded,
+              isActive: currentIndex == 0,
+              onTap: () => Navigator.pushReplacementNamed(
+                context,
+                AppRoutes.dashboard,
+              ),
+            ),
+
+            const SizedBox(width: 48), // เว้นช่อง FAB
+
+            _NavItem(
+              icon: Icons.person_rounded,
+              isActive: currentIndex == 2,
+              onTap: () => Navigator.pushNamed(
+                context,
+                AppRoutes.login,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    required this.icon,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final activeColor = isDark ? Colors.white : const Color(0xFF2196F3);
+    final inactiveColor = isDark
+        ? Colors.white.withOpacity(0.4)
+        : const Color(0xFFBDBDBD);
+
+    return IconButton(
+      icon: Icon(icon),
+      iconSize: 26,
+      color: isActive ? activeColor : inactiveColor,
+      onPressed: onTap,
     );
   }
 }
