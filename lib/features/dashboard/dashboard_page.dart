@@ -1,26 +1,30 @@
 import 'package:flutter/material.dart';
-import '../../core/storage/auth_storage.dart';
 import '../../shared/widgets/bottom_nav.dart';
 import 'widgets/user_history_list.dart';
 import 'widgets/global_stats_grid.dart';
 import '../../routes/app_routes.dart';
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final bool isLoggedIn = AuthStorage.isLoggedIn();
+  State<DashboardPage> createState() => _DashboardPageState();
+}
 
+class _DashboardPageState extends State<DashboardPage> {
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Hero(
           tag: 'app-logo',
-          child: Image.asset('assets/images/whiteLogo.png', width: 48),
+          child: Image.asset(
+            'assets/images/whiteLogo.png',
+            width: 48,
+          ),
         ),
         centerTitle: true,
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -28,23 +32,23 @@ class DashboardPage extends StatelessWidget {
           children: [
             const SizedBox(height: 16),
 
-            const SizedBox(height: 24),
-
             const GlobalStatsGrid(),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
 
-            if (isLoggedIn) const UserHistoryList(),
+            // ⚠️ อย่า pass isLoggedIn แล้ว
+            const UserHistoryList(),
           ],
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: FloatingActionButton(
         elevation: 0,
         backgroundColor: Colors.white,
-        onPressed: () {
-          Navigator.pushNamed(context, AppRoutes.upload);
+        onPressed: () async {
+          await Navigator.pushNamed(context, AppRoutes.upload);
+          setState(() {}); // 🔥 รีเฟรชหลังกลับมา
         },
         child: const Icon(Icons.add_rounded, color: Colors.black),
       ),

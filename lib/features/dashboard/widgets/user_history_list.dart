@@ -1,177 +1,194 @@
 import 'package:flutter/material.dart';
-import '../../../core/utils/mock_data.dart';
+import '../../../core/storage/auth_storage.dart';
+import '../../../core/storage/history_storage.dart';
+import '../../../core/models/history_item.dart';
 
 class UserHistoryList extends StatelessWidget {
   const UserHistoryList({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final history = MockData.userHistory;
+    // Logic คงเดิมตามที่คุณให้มา
+    final bool isLoggedIn = AuthStorage.isLoggedIn();
+    final List<HistoryItem> items = HistoryStorage.items;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // MINIMAL HEADER
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Text(
-            'Your History',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-              color: Colors.white,
-              letterSpacing: 0.5,
-            ),
+        _buildHeader(),
+        const SizedBox(height: 16),
+        
+        if (!isLoggedIn)
+          _buildPlaceholder(
+            icon: Icons.lock_person_outlined,
+            title: 'Authentication Required',
+            subtitle: 'Sign in to sync and view your clinical history.',
+          )
+        else if (items.isEmpty)
+          _buildPlaceholder(
+            icon: Icons.biotech_outlined,
+            title: 'No Records Found',
+            subtitle: 'Start your first analysis to see results here.',
+          )
+        else
+          // รายการประวัติ
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 12),
+            itemBuilder: (context, index) => _buildHistoryTile(items[index]),
+          ),
+      ],
+    );
+  }
+
+  // --- Header สไตล์ Minimal ---
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        const Text(
+          'HISTORY',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 2.5,
+            color: Colors.black54,
           ),
         ),
-
-        // MAIN CONTAINER
+        const Spacer(),
         Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFFE8E8E8),
-              width: 1,
-            ),
-          ),
-          child: Column(
-            children: List.generate(history.length, (index) {
-              final item = history[index];
-              final bool positive = item['result'] == 'Positive';
-
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Row(
-                      children: [
-                        // MINIMAL RESULT ICON
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: positive
-                                ? const Color(0xFFFFF5F5)
-                                : const Color(0xFFF0F9F4),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            positive
-                                ? Icons.warning_amber_rounded
-                                : Icons.check_circle_outline_rounded,
-                            color: positive
-                                ? const Color(0xFFDC2626)
-                                : const Color(0xFF059669),
-                            size: 22,
-                          ),
-                        ),
-
-                        const SizedBox(width: 16),
-
-                        // PATIENT INFO
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                item['patient'].toString(),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 15,
-                                  color: Color(0xFF0A0A0A),
-                                  letterSpacing: 0.2,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.science_outlined,
-                                    size: 13,
-                                    color: Colors.grey[400],
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    item['model'].toString(),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w400,
-                                      color: Colors.grey[500],
-                                      letterSpacing: 0.2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Icon(
-                                    Icons.calendar_today_outlined,
-                                    size: 13,
-                                    color: Colors.grey[400],
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    item['date'].toString(),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w400,
-                                      color: Colors.grey[500],
-                                      letterSpacing: 0.2,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(width: 12),
-
-                        // MINIMAL RESULT INDICATOR
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: positive
-                                    ? const Color(0xFFDC2626)
-                                    : const Color(0xFF059669),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              item['result'].toString(),
-                              style: TextStyle(
-                                color: positive
-                                    ? const Color(0xFFDC2626)
-                                    : const Color(0xFF059669),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // SUBTLE DIVIDER
-                  if (index != history.length - 1)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      child: Container(
-                        height: 1,
-                        color: const Color(0xFFF5F5F5),
-                      ),
-                    ),
-                ],
-              );
-            }),
-          ),
+          width: 40,
+          height: 2,
+          color: Colors.black12,
         ),
       ],
+    );
+  }
+
+  // --- Placeholder สำหรับ Not Login และ Empty State ---
+  Widget _buildPlaceholder({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBFBFB),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 32, color: Colors.black12),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black.withOpacity(0.4),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- รายการประวัติสไตล์ Technical ---
+  Widget _buildHistoryTile(HistoryItem item) {
+    final bool isPositive = item.result.toUpperCase() == 'POSITIVE';
+    
+    // บรรทัดที่แก้: กำหนดสีหลักของสถานะ (แดงสำหรับ Pos / เขียวสำหรับ Neg)
+    final Color statusColor = isPositive ? const Color(0xFFFF3B30) : const Color(0xFF34C759);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // บรรทัดที่แก้: เปลี่ยนสี Indicator ตามสถานะ
+          Container(
+            width: 4,
+            height: 32,
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.5), // ใส่ความโปร่งใสเล็กน้อยเพื่อให้ดู Clean
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.model.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                    color: Colors.black45,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                // บรรทัดที่แก้: แสดงผล Patient ID (HN) ต่อจากชื่อ หรือแสดง HN ตรงๆ
+                Text(
+                  item.patientId != null ? 'HN: ${item.patientId}' : 'General Patient',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                item.result.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: statusColor, 
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${item.date.day}/${item.date.month}/${item.date.year}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.black.withOpacity(0.3),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

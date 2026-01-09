@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../routes/app_routes.dart';
 
 class UploadPage extends StatefulWidget {
   const UploadPage({super.key});
@@ -10,488 +11,287 @@ class UploadPage extends StatefulWidget {
 }
 
 class _UploadPageState extends State<UploadPage> {
-  File? _selectedImage;
+  File? _image;
   String? _selectedModel;
-  final _hnController = TextEditingController();
-  bool _isProcessing = false;
+  final TextEditingController _hnController = TextEditingController();
+  bool _loading = false;
 
-  final List<String> _models = [
+  final List<String> models = [
     'ResNet50',
     'VGG16',
     'InceptionV3',
     'MobileNetV2',
   ];
 
-  Future<void> _pickImage(ImageSource source) async {
+  // ---------------- Image Picker ----------------
+
+  Future<void> _pick(ImageSource source) async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
-    
-    if (pickedFile != null) {
+    final picked = await picker.pickImage(source: source);
+    if (picked != null) {
       setState(() {
-        _selectedImage = File(pickedFile.path);
+        _image = File(picked.path);
       });
     }
   }
 
-  void _showImageSourceDialog() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF0A0A0A),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
+  // ---------------- Submit ----------------
+
+  Future<void> _submit() async {
+    // validate เฉพาะที่จำเป็น
+    if (_image == null || _selectedModel == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select image and model'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    // mock analyze
+    await Future.delayed(const Duration(seconds: 2));
+
+    setState(() => _loading = false);
+
+    if (!mounted) return;
+    bool isPositive = DateTime.now().second % 2 == 0;
+
+    // route ไป ResultPage
+    Navigator.pushNamed(
+      context,
+      AppRoutes.result,
+      arguments: {
+        'image': _image,
+        'model': _selectedModel,
+        'hn': _hnController.text.isEmpty ? null : _hnController.text,
+        'positive': isPositive,
+      },
+    );
+  }
+
+  // ---------------- UI ----------------
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'DETECTION SETUP',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 2.0,
+            color: Colors.white,
           ),
         ),
-        padding: const EdgeInsets.all(24),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Select Image Source',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w400,
-                color: Colors.white,
-                letterSpacing: 0.3,
-              ),
-            ),
-            const SizedBox(height: 24),
-            _ImageSourceButton(
-              icon: Icons.photo_library_outlined,
-              label: 'Gallery',
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.gallery);
-              },
-            ),
+            _sectionTitle('TARGET IMAGE'),
             const SizedBox(height: 12),
-            _ImageSourceButton(
-              icon: Icons.camera_alt_outlined,
-              label: 'Camera',
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.camera);
-              },
-            ),
-            const SizedBox(height: 16),
+            _buildImagePicker(),
+
+            const SizedBox(height: 32),
+            _sectionTitle('AI ANALYSIS MODEL'),
+            const SizedBox(height: 12),
+            _buildModelSelector(),
+
+            const SizedBox(height: 32),
+            _sectionTitle('PATIENT IDENTIFICATION'),
+            const SizedBox(height: 12),
+            _buildHNInputField(),
+
+            const SizedBox(height: 48),
+            _buildSubmitButton(),
+            const SizedBox(height: 24),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _processImage() async {
-    if (_selectedImage == null || _selectedModel == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Please select an image and model',
-            style: TextStyle(color: Color(0xFF0A0A0A)),
-          ),
-          backgroundColor: Colors.white,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: const Color(0xFF0A0A0A),
-            onPressed: () {},
+  // ---------------- Widgets ----------------
+
+  Widget _buildImagePicker() {
+    return GestureDetector(
+      onTap: () => _pick(ImageSource.gallery),
+      child: Container(
+        width: double.infinity,
+        height: 180,
+        decoration: BoxDecoration(
+          color: _image != null ? Colors.white : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: _image != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.file(_image!, fit: BoxFit.cover),
+                    Container(color: Colors.black26),
+                    const Center(
+                      child: Icon(
+                        Icons.refresh,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.add_a_photo_outlined,
+                    color: Colors.white.withOpacity(0.5),
+                    size: 40,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Upload Blood Smear',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildModelSelector() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        children: models.map((model) {
+          final bool isSelected = _selectedModel == model;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: ListTile(
+              onTap: () => setState(() => _selectedModel = model),
+              title: Text(
+                model,
+                style: TextStyle(
+                  color: isSelected ? Colors.black : Colors.white70,
+                  fontWeight:
+                      isSelected ? FontWeight.w600 : FontWeight.w400,
+                  fontSize: 14,
+                ),
+              ),
+              trailing: isSelected
+                  ? const Icon(Icons.check_circle, color: Colors.black)
+                  : Icon(
+                      Icons.circle_outlined,
+                      color: Colors.white.withOpacity(0.2),
+                    ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildHNInputField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: TextField(
+        controller: _hnController,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: 'HN Number (optional)',
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          prefixIcon: Icon(
+            Icons.badge_outlined,
+            color: Colors.white.withOpacity(0.5),
           ),
         ),
-      );
-      return;
-    }
+      ),
+    );
+  }
 
-    setState(() => _isProcessing = true);
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 60,
+      child: ElevatedButton(
+        onPressed: _loading ? null : _submit,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          disabledBackgroundColor: Colors.white10,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          elevation: 0,
+        ),
+        child: _loading
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.black,
+                ),
+              )
+            : const Text(
+                'START ANALYSIS',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
+      ),
+    );
+  }
 
-    // Simulate processing
-    await Future.delayed(const Duration(seconds: 2));
-
-    setState(() => _isProcessing = false);
-
-    // Navigate to result page
-    // Navigator.pushNamed(context, AppRoutes.result, arguments: {...});
+  Widget _sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: Colors.white.withOpacity(0.4),
+          letterSpacing: 1.5,
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _hnController.dispose();
     super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'New Detection',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w400,
-            color: Colors.white,
-            letterSpacing: 0.3,
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Image Upload Section
-            _SectionLabel(label: 'Upload Image'),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: _showImageSourceDialog,
-              child: Container(
-                height: 280,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.1),
-                    width: 1,
-                  ),
-                ),
-                child: _selectedImage == null
-                    ? Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 64,
-                            height: 64,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Icon(
-                              Icons.add_photo_alternate_outlined,
-                              size: 32,
-                              color: Colors.white.withOpacity(0.6),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Tap to upload image',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.white.withOpacity(0.6),
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'JPG, PNG up to 10MB',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.white.withOpacity(0.4),
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ],
-                      )
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.file(
-                              _selectedImage!,
-                              fit: BoxFit.cover,
-                            ),
-                            Positioned(
-                              top: 12,
-                              right: 12,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.6),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: IconButton(
-                                  icon: const Icon(
-                                    Icons.close,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                  onPressed: () {
-                                    setState(() => _selectedImage = null);
-                                  },
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Model Selection
-            _SectionLabel(label: 'Select Model'),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.1),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                children: List.generate(_models.length, (index) {
-                  final model = _models[index];
-                  final isSelected = _selectedModel == model;
-                  final isLast = index == _models.length - 1;
-
-                  return Column(
-                    children: [
-                      InkWell(
-                        onTap: () => setState(() => _selectedModel = model),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.psychology_outlined,
-                                  size: 22,
-                                  color: Colors.white.withOpacity(0.7),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Text(
-                                  model,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w400,
-                                    color: Colors.white,
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                width: 20,
-                                height: 20,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Colors.white.withOpacity(0.3),
-                                    width: 2,
-                                  ),
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.transparent,
-                                ),
-                                child: isSelected
-                                    ? const Icon(
-                                        Icons.check,
-                                        size: 14,
-                                        color: Color(0xFF0A0A0A),
-                                      )
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (!isLast)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 18),
-                          child: Container(
-                            height: 1,
-                            color: Colors.white.withOpacity(0.05),
-                          ),
-                        ),
-                    ],
-                  );
-                }),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // HN Input
-            _SectionLabel(label: 'Patient HN (Optional)'),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.1),
-                  width: 1,
-                ),
-              ),
-              child: TextField(
-                controller: _hnController,
-                keyboardType: TextInputType.number,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.white,
-                  letterSpacing: 0.3,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Enter patient HN',
-                  hintStyle: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.person_outline,
-                    color: Colors.white.withOpacity(0.6),
-                    size: 22,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.all(18),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 40),
-
-            // Process Button
-            SizedBox(
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _isProcessing ? null : _processImage,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF0A0A0A),
-                  disabledBackgroundColor: Colors.white.withOpacity(0.3),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 0,
-                ),
-                child: _isProcessing
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0A0A0A)),
-                        ),
-                      )
-                    : const Text(
-                        'Detect Malaria',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  final String label;
-
-  const _SectionLabel({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w400,
-        color: Colors.white.withOpacity(0.6),
-        letterSpacing: 0.3,
-      ),
-    );
-  }
-}
-
-class _ImageSourceButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _ImageSourceButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.1),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: Colors.white, size: 22),
-            ),
-            const SizedBox(width: 16),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w400,
-                color: Colors.white,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
