@@ -1,15 +1,18 @@
+import 'package:flutter/foundation.dart';
 import '../models/history_item.dart';
 
 class HistoryStorage {
-  static final List<HistoryItem> _items = [];
+  static final ValueNotifier<List<HistoryItem>> itemsNotifier = ValueNotifier<List<HistoryItem>>([]);
 
-  static List<HistoryItem> get items => _items;
+  static List<HistoryItem> get items => itemsNotifier.value;
 
   static void add(HistoryItem item) {
-    _items.insert(0, item);
+    // เพิ่ม item ใหม่ไว้บนสุด และกระจาย List ใหม่เพื่อแจ้งเตือน UI
+    itemsNotifier.value = [item, ...itemsNotifier.value];
   }
 
+  // 🔥 เพิ่มฟังก์ชันสำหรับล้างประวัติ (เช่น ตอน User Logout)
   static void clear() {
-    _items.clear();
+    itemsNotifier.value = [];
   }
 }

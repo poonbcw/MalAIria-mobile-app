@@ -23,87 +23,90 @@ class LoginPage extends StatelessWidget {
                 child: IntrinsicHeight(
                   child: Column(
                     children: [
-                      // HEADER
+                      // --- HEADER ---
+                      // ปรับสัดส่วนให้ Header ดูโปร่งขึ้น
                       SizedBox(
-                        height: isSmallScreen ? height * 0.40 : height * 0.45,
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Hero(
-                                tag: 'app-logo',
-                                child: Image.asset(
-                                  'assets/images/whiteLogo.png',
-                                  width: isSmallScreen ? 64 : 72,
-                                  height: isSmallScreen ? 64 : 72,
-                                ),
+                        height: isSmallScreen ? height * 0.38 : height * 0.42,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Spacer(flex: 2), // ดันโลโก้ลงมานิดหน่อย
+                            Hero(
+                              tag: 'app-logo',
+                              child: Image.asset(
+                                'assets/images/whiteLogo.png',
+                                width: isSmallScreen ? 60 : 68,
+                                height: isSmallScreen ? 60 : 68,
                               ),
-                              const SizedBox(height: 24),
-                              Text(
-                                'Medical Analysis',
-                                style: TextStyle(
-                                  fontSize: isSmallScreen ? 22 : 26,
-                                  fontWeight: FontWeight.w300,
-                                  color: Colors.white,
-                                  letterSpacing: 2.2,
-                                ),
+                            ),
+                            const SizedBox(height: 28),
+                            Text(
+                              'Medical Analysis',
+                              style: TextStyle(
+                                fontSize: isSmallScreen ? 22 : 24,
+                                fontWeight: FontWeight.w300,
+                                color: Colors.white,
+                                letterSpacing: 3.5, // เพิ่ม letter spacing ให้ดูพรีเมียม
                               ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'Secure access with Google account',
-                                style: TextStyle(
-                                  fontSize: isSmallScreen ? 12 : 13,
-                                  color: Colors.white.withOpacity(0.5),
-                                  letterSpacing: 0.8,
-                                ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Secure access with Google account',
+                              style: TextStyle(
+                                fontSize: isSmallScreen ? 12 : 13,
+                                color: Colors.white.withOpacity(0.4),
+                                letterSpacing: 0.5,
                               ),
-                            ],
-                          ),
+                            ),
+                            const Spacer(flex: 1),
+                          ],
                         ),
                       ),
 
-                      // LOGIN CARD
+                      // --- LOGIN CARD ---
                       Expanded(
                         child: Container(
                           width: double.infinity,
                           padding: EdgeInsets.fromLTRB(
                             32,
-                            isSmallScreen ? 32 : 48,
+                            isSmallScreen ? 40 : 56, // เพิ่ม padding บนให้ดูโล่ง
                             32,
-                            32,
+                            48, // เพิ่ม padding ล่างเพื่อความสวยงาม
                           ),
                           decoration: const BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(40),
-                              topRight: Radius.circular(40),
+                              topLeft: Radius.circular(44), // มนขึ้นเล็กน้อยเพื่อให้ดู Modern
+                              topRight: Radius.circular(44),
                             ),
                           ),
                           child: Column(
                             children: [
+                              // Icon Indicator
                               Container(
-                                width: 52,
-                                height: 52,
+                                width: 56,
+                                height: 56,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF8F9FA),
-                                  borderRadius: BorderRadius.circular(16),
+                                  color: const Color(0xFFF1F3F5),
+                                  borderRadius: BorderRadius.circular(18),
                                 ),
                                 child: Icon(
                                   Icons.lock_outline_rounded,
-                                  size: 26,
-                                  color: Colors.grey[800],
+                                  size: 24,
+                                  color: Colors.black.withOpacity(0.7),
                                 ),
                               ),
-                              SizedBox(height: isSmallScreen ? 24 : 36),
+                              const SizedBox(height: 32),
                               Text(
                                 'Welcome',
                                 style: TextStyle(
-                                  fontSize: isSmallScreen ? 26 : 32,
+                                  fontSize: isSmallScreen ? 26 : 30,
                                   fontWeight: FontWeight.w300,
                                   color: const Color(0xFF0A0A0A),
+                                  letterSpacing: -0.5,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 10),
                               Text(
                                 'Sign in with your Google account',
                                 style: TextStyle(
@@ -111,16 +114,16 @@ class LoginPage extends StatelessWidget {
                                   color: Colors.grey[500],
                                 ),
                               ),
-                              SizedBox(height: isSmallScreen ? 32 : 48),
+                              
+                              const Spacer(), // ใช้ Spacer แทน SizedBox เพื่อให้ปุ่มจัดวางตามขนาดจอ
 
                               // GOOGLE BUTTON
                               SizedBox(
                                 width: double.infinity,
-                                height: 56,
+                                height: 60, // ปรับปุ่มให้สูงขึ้นเพื่อให้กดง่ายและดูเต็ม
                                 child: OutlinedButton(
                                   onPressed: () {
                                     AuthStorage.login();
-
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
@@ -128,29 +131,29 @@ class LoginPage extends StatelessWidget {
                                       ),
                                     );
                                   },
-
                                   style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(
-                                      color: Color(0xFFE8E8E8),
+                                    side: BorderSide(
+                                      color: Colors.black.withOpacity(0.08),
                                     ),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
+                                      borderRadius: BorderRadius.circular(16),
                                     ),
+                                    backgroundColor: Colors.white,
                                   ),
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Image.asset(
                                         'assets/images/google_logo.png',
-                                        width: 20,
-                                        height: 20,
+                                        width: 22,
+                                        height: 22,
                                       ),
-                                      const SizedBox(width: 12),
+                                      const SizedBox(width: 14),
                                       const Text(
                                         'Continue with Google',
                                         style: TextStyle(
                                           fontSize: 15,
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.w600,
                                           color: Color(0xFF1F2937),
                                         ),
                                       ),
@@ -158,18 +161,8 @@ class LoginPage extends StatelessWidget {
                                   ),
                                 ),
                               ),
-
-                              const Spacer(),
-                              Text(
-                                'By continuing, you agree to our\nTerms of Service & Privacy Policy',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey[400],
-                                  height: 1.4,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
+                              
+                              const Spacer(), // สร้างระยะห่างด้านล่างปุ่มให้สมดุล
                             ],
                           ),
                         ),

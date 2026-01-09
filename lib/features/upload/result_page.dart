@@ -12,14 +12,18 @@ class ResultPage extends StatelessWidget {
     final args =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
 
-    final File image = args['image'];
+    final dynamic imageRaw = args['image'];
+    final File image = imageRaw is String ? File(imageRaw) : imageRaw;
     final String model = args['model'];
     final String? hn = args['hn'];
-
-    /// mock ผลลัพธ์
     final bool positive = args['positive'] as bool? ?? false;
 
-    final Color resultColor = positive ? const Color(0xFFFF3B30) : Colors.white;
+    // ✅ ตรวจสอบว่ามาจากหน้า History หรือไม่
+    final bool fromHistory = args['fromHistory'] ?? false;
+
+    final Color resultColor = positive
+        ? const Color(0xFFFF3B30)
+        : const Color.fromARGB(255, 57, 191, 84);
     final Color borderColor = positive
         ? resultColor.withOpacity(0.4)
         : Colors.white.withOpacity(0.1);
@@ -30,7 +34,13 @@ class ResultPage extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        leading: const SizedBox(),
+        // ✅ เปลี่ยนจาก SizedBox เปล่า เป็นปุ่ม Back ถ้ามาจาก History เพื่อความสะดวก
+        leading: fromHistory 
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
+                onPressed: () => Navigator.pop(context),
+              )
+            : const SizedBox(),
         title: Text(
           'ANALYSIS SUMMARY',
           style: TextStyle(
@@ -112,44 +122,48 @@ class ResultPage extends StatelessWidget {
 
             const Spacer(),
 
-            // FINISH
+            // ✅ ส่วนของปุ่มที่ปรับปรุงใหม่
             SizedBox(
               height: 62,
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  if (AuthStorage.isLoggedIn()) {
-                    HistoryStorage.add(
-                      HistoryItem(
-                        model: model,
-                        result: positive ? 'Positive' : 'Negative',
-                        date: DateTime.now(),
-                        patientId: hn,
-                      ),
+                  if (fromHistory) {
+                    // 1. ถ้ามาจากประวัติ แค่ปิดหน้าย้อนกลับไปเฉยๆ
+                    Navigator.pop(context);
+                  } else {
+                    // 2. ถ้าเป็นการสแกนใหม่ ให้บันทึกลงประวัติ
+                    if (AuthStorage.isLoggedIn()) {
+                      HistoryStorage.add(
+                        HistoryItem(
+                          model: model,
+                          result: positive ? 'Positive' : 'Negative',
+                          date: DateTime.now(),
+                          patientId: hn,
+                          imagePath: image.path,
+                        ),
+                      );
+                    }
+                    // กลับไปหน้าแรกแบบ Reset State
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/dashboard', 
+                      (route) => false,
                     );
                   }
-
-                  Navigator.popUntil(context, (route) => route.isFirst);
                 },
-
-                style: ButtonStyle(
-                  backgroundColor: WidgetStateProperty.resolveWith((states) {
-                    return Colors.white; // ✅ บังคับทุก state
-                  }),
-                  foregroundColor: WidgetStateProperty.resolveWith((states) {
-                    return Colors.black;
-                  }),
-                  elevation: WidgetStateProperty.all(0),
-                  shape: WidgetStateProperty.all(
-                    RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-
-                child: const Text(
-                  'FINISH REPORT',
-                  style: TextStyle(
+                child: Text(
+                  // ✅ เปลี่ยนชื่อปุ่มตามสถานะ
+                  fromHistory ? 'CLOSE' : 'FINISH REPORT',
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.4,
