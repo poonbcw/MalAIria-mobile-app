@@ -1,33 +1,28 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../routes/app_routes.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // ✅ นำเข้า Riverpod
 
-class UploadPage extends StatefulWidget {
+import '../../core/storage/auth_storage.dart';
+// ✅ นำเข้าคิวที่เราเพิ่งสร้าง (แก้ path ให้ตรงกับที่คุณเก็บไฟล์ไว้นะครับ)
+import '../../core/providers/analysis_queue_provider.dart'; 
+
+// ✅ เปลี่ยนจาก StatefulWidget เป็น ConsumerStatefulWidget เพื่อใช้ Riverpod
+class UploadPage extends ConsumerStatefulWidget {
   const UploadPage({super.key});
 
   @override
-  State<UploadPage> createState() => _UploadPageState();
+  ConsumerState<UploadPage> createState() => _UploadPageState();
 }
 
-class _UploadPageState extends State<UploadPage> {
+class _UploadPageState extends ConsumerState<UploadPage> {
   File? _image;
-  String? _selectedModel;
   final TextEditingController _hnController = TextEditingController();
-  bool _loading = false;
-
-  final List<String> models = [
-    'ResNet50',
-    'VGG16',
-    'InceptionV3',
-    'MobileNetV2',
-  ];
 
   // ---------------- Image Picker ----------------
-
-  Future<void> _pick(ImageSource source) async {
+  Future<void> _pickFromGallery() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source);
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (picked != null) {
       setState(() {
         _image = File(picked.path);
@@ -35,55 +30,70 @@ class _UploadPageState extends State<UploadPage> {
     }
   }
 
-  // ---------------- Submit ----------------
-
-  Future<void> _submit() async {
-    // validate เฉพาะที่จำเป็น
-    if (_image == null || _selectedModel == null) {
+  // ---------------- Submit (แบบโยนเข้าคิว) ----------------
+  void _submit() {
+    if (_image == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select image and model'),
+          content: Text('Please select an image first'),
+          backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
         ),
       );
       return;
     }
 
-    setState(() => _loading = true);
+    // ==========================================
+    // 🚀 โยนงานเข้า Queue เบื้องหลังทันที! (ไม่ต้องรอ)
+    // ==========================================
+    final hn = _hnController.text.trim().isEmpty ? null : _hnController.text.trim();
+    
+    // เรียกใช้ addTask จาก Provider
+    ref.read(analysisQueueProvider.notifier).addTask(_image!, hn);
 
-    // mock analyze
-    await Future.delayed(const Duration(seconds: 2));
-
-    setState(() => _loading = false);
-
-    if (!mounted) return;
-    bool isPositive = DateTime.now().second % 2 == 0;
-
-    // route ไป ResultPage
-    Navigator.pushNamed(
-      context,
-      AppRoutes.result,
-      arguments: {
-        'image': _image,
-        'model': _selectedModel,
-        'hn': _hnController.text.isEmpty ? null : _hnController.text,
-        'positive': isPositive,
-      },
+    // 🟢 แสดงข้อความสำเร็จว่ารับงานแล้ว
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: const [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 12),
+            Text('Added to analysis queue!'),
+          ],
+        ),
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
     );
+
+    // 🧹 ล้างหน้าจอเพื่อเตรียมรับรูปต่อไปทันที
+    setState(() {
+      _image = null;
+      _hnController.clear();
+    });
+    
+    // เด้งกลับไปหน้า Dashboard อัตโนมัติ เพื่อให้ผู้ใช้ไปรอดูสถานะคิว
+    Navigator.pop(context); 
   }
 
   // ---------------- UI ----------------
-
   @override
   Widget build(BuildContext context) {
+    final bool isLoggedIn = AuthStorage.isLoggedIn();
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color.fromARGB(255, 22, 27, 50), 
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_sharp, color: Colors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
-          'DETECTION SETUP',
+          'NEW ANALYSIS',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -101,15 +111,12 @@ class _UploadPageState extends State<UploadPage> {
             const SizedBox(height: 12),
             _buildImagePicker(),
 
-            const SizedBox(height: 32),
-            _sectionTitle('AI ANALYSIS MODEL'),
-            const SizedBox(height: 12),
-            _buildModelSelector(),
-
-            const SizedBox(height: 32),
-            _sectionTitle('PATIENT IDENTIFICATION'),
-            const SizedBox(height: 12),
-            _buildHNInputField(),
+            if (isLoggedIn) ...[
+              const SizedBox(height: 32),
+              _sectionTitle('PATIENT IDENTIFICATION'),
+              const SizedBox(height: 12),
+              _buildHNInputField(),
+            ],
 
             const SizedBox(height: 48),
             _buildSubmitButton(),
@@ -121,10 +128,9 @@ class _UploadPageState extends State<UploadPage> {
   }
 
   // ---------------- Widgets ----------------
-
   Widget _buildImagePicker() {
     return GestureDetector(
-      onTap: () => _pick(ImageSource.gallery),
+      onTap: _pickFromGallery, 
       child: Container(
         width: double.infinity,
         height: 180,
@@ -140,12 +146,20 @@ class _UploadPageState extends State<UploadPage> {
                   fit: StackFit.expand,
                   children: [
                     Image.file(_image!, fit: BoxFit.cover),
-                    Container(color: Colors.black26),
-                    const Center(
-                      child: Icon(
-                        Icons.refresh,
-                        color: Colors.white,
-                        size: 32,
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.edit_outlined, 
+                          color: Colors.white,
+                          size: 18,
+                        ),
                       ),
                     ),
                   ],
@@ -155,13 +169,13 @@ class _UploadPageState extends State<UploadPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.add_a_photo_outlined,
+                    Icons.photo_library_outlined, 
                     color: Colors.white.withOpacity(0.5),
                     size: 40,
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Upload Blood Smear',
+                    'Choose from Gallery',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.5),
                       fontSize: 14,
@@ -169,46 +183,6 @@ class _UploadPageState extends State<UploadPage> {
                   ),
                 ],
               ),
-      ),
-    );
-  }
-
-  Widget _buildModelSelector() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        children: models.map((model) {
-          final bool isSelected = _selectedModel == model;
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            margin: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.white : Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: ListTile(
-              onTap: () => setState(() => _selectedModel = model),
-              title: Text(
-                model,
-                style: TextStyle(
-                  color: isSelected ? Colors.black : Colors.white70,
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.w400,
-                  fontSize: 14,
-                ),
-              ),
-              trailing: isSelected
-                  ? const Icon(Icons.check_circle, color: Colors.black)
-                  : Icon(
-                      Icons.circle_outlined,
-                      color: Colors.white.withOpacity(0.2),
-                    ),
-            ),
-          );
-        }).toList(),
       ),
     );
   }
@@ -243,33 +217,23 @@ class _UploadPageState extends State<UploadPage> {
       width: double.infinity,
       height: 60,
       child: ElevatedButton(
-        onPressed: _loading ? null : _submit,
+        onPressed: _submit, // ✅ ไม่ต้องเช็คตัวแปร _loading แล้ว เพราะกดปุ๊บเสร็จปั๊บ!
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
-          disabledBackgroundColor: Colors.white10,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
           elevation: 0,
         ),
-        child: _loading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: Colors.black,
-                ),
-              )
-            : const Text(
-                'START ANALYSIS',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
-              ),
+        child: const Text(
+          'SUBMIT',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
       ),
     );
   }

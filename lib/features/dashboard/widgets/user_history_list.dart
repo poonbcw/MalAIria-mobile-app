@@ -1,11 +1,93 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http; 
+import '../../../core/api/api_config.dart'; 
 import '../../../core/storage/auth_storage.dart';
-import '../../../core/storage/history_storage.dart';
 import '../../../core/models/history_item.dart';
-import '../../../routes/app_routes.dart'; // ตรวจสอบ Path ของ AppRoutes ด้วยนะครับ
+import '../../../routes/app_routes.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class UserHistoryList extends StatelessWidget {
-  const UserHistoryList({super.key});
+class UserHistoryList extends StatefulWidget {
+  final bool hideEmptyState; 
+
+  const UserHistoryList({
+    super.key, 
+    this.hideEmptyState = false, 
+  });
+
+  @override
+  State<UserHistoryList> createState() => _UserHistoryListState();
+}
+
+class _UserHistoryListState extends State<UserHistoryList> {
+  Future<List<HistoryItem>>? _historyFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory(); 
+  }
+
+  void _loadHistory() {
+    setState(() {
+      _historyFuture = _fetchHistoryFromApi();
+    });
+  }
+
+  Future<List<HistoryItem>> _fetchHistoryFromApi() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return []; 
+    
+    try {
+      final token = await user.getIdToken(); 
+
+      final url = Uri.parse('${ApiConfig.baseUrl}/api/history');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token', 
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+
+        var historyList = data.map((json) {
+          String imgUrl = '';
+          if (json['images'] != null && json['images'].isNotEmpty) {
+            imgUrl = json['images'][0]['imageUrl'] ?? '';
+          }
+
+          // ✅ ดึงข้อมูลกล่องออกมาจาก detectMetadata
+          List<dynamic> parsedBoxes = [];
+          if (json['detectMetadata'] != null && json['detectMetadata'] is List) {
+            parsedBoxes = json['detectMetadata'];
+          }
+
+          return HistoryItem(
+            patientId: json['hn']?.toString() ?? 'Unknown',
+            model: json['modelUsed'] ?? 'MALARIA-NET', 
+            result: json['result'] ?? 'NEGATIVE',
+            imagePath: imgUrl, 
+            date: json['createdAt'] != null
+                ? DateTime.parse(json['createdAt'])
+                : DateTime.now(),
+            boxes: parsedBoxes, // ✅ แนบกล่องเข้าไปด้วย
+          );
+        }).toList();
+
+        historyList.sort((a, b) => b.date.compareTo(a.date));
+
+        return historyList;
+      } else {
+        throw Exception('Failed to load history');
+      }
+    } catch (e) {
+      debugPrint("❌ Fetch History Error: $e");
+      return []; 
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,9 +96,6 @@ class UserHistoryList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader(),
-        const SizedBox(height: 16),
-
         if (!isLoggedIn)
           _buildPlaceholder(
             icon: Icons.lock_person_outlined,
@@ -24,10 +103,33 @@ class UserHistoryList extends StatelessWidget {
             subtitle: 'Sign in to sync and view your clinical history.',
           )
         else
-          ValueListenableBuilder<List<HistoryItem>>(
-            valueListenable: HistoryStorage.itemsNotifier,
-            builder: (context, items, child) {
+          FutureBuilder<List<HistoryItem>>(
+            future: _historyFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return _buildPlaceholder(
+                  icon: Icons.error_outline,
+                  title: 'Connection Error',
+                  subtitle: 'Could not load your history. Please try again.',
+                );
+              }
+
+              final items = snapshot.data ?? [];
+
               if (items.isEmpty) {
+                if (widget.hideEmptyState) {
+                  return const SizedBox.shrink(); 
+                }
+                
                 return _buildPlaceholder(
                   icon: Icons.biotech_outlined,
                   title: 'No Records Found',
@@ -39,9 +141,10 @@ class UserHistoryList extends StatelessWidget {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: items.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
                 itemBuilder: (context, index) =>
-                    _buildHistoryTile(context, items[index]), // ✅ ส่ง context เข้าไป
+                    _buildHistoryTile(context, items[index]),
               );
             },
           ),
@@ -49,28 +152,6 @@ class UserHistoryList extends StatelessWidget {
     );
   }
 
-  // --- Header สไตล์ Minimal ---
-  Widget _buildSectionHeader() {
-    return Row(
-      children: [
-        const Text(
-          'HISTORY',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 2.5,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Container(height: 1, color: Colors.black.withOpacity(0.05)),
-        ),
-      ],
-    );
-  }
-
-  // --- Placeholder สำหรับ Not Login และ Empty State ---
   Widget _buildPlaceholder({
     required IconData icon,
     required String title,
@@ -111,23 +192,24 @@ class UserHistoryList extends StatelessWidget {
     );
   }
 
-  // --- รายการประวัติสไตล์ Technical (เพิ่ม Click Action) ---
-  Widget _buildHistoryTile(BuildContext context, HistoryItem item) { // ✅ เพิ่ม context
+  Widget _buildHistoryTile(BuildContext context, HistoryItem item) {
     final bool isPositive = item.result.toUpperCase() == 'POSITIVE';
-    final Color statusColor = isPositive ? const Color(0xFFFF3B30) : const Color(0xFF34C759);
+    final Color statusColor = isPositive
+        ? const Color(0xFFFF3B30)
+        : const Color(0xFF34C759);
 
-    return InkWell( // ✅ บรรทัดที่เพิ่ม: หุ้มเพื่อให้กดได้
+    return InkWell(
       onTap: () {
-        // ✅ บรรทัดที่เพิ่ม: ส่งกลับหน้า Result พร้อมแนบข้อมูลเดิมไป
         Navigator.pushNamed(
           context,
           AppRoutes.result,
           arguments: {
-            'image': item.imagePath, // ต้องมี File image ใน HistoryItem ตามที่คุยกันก่อนหน้า
+            'image': item.imagePath,
             'model': item.model,
             'hn': item.patientId,
             'positive': isPositive,
-            'fromHistory': true, // บอกหน้า Result ว่าดูประวัติย้อนหลังนะ
+            'fromHistory': true,
+            'boxes': item.boxes, // ✅ ส่งข้อมูลกล่องไปให้หน้า Result เพื่อวาดกรอบ
           },
         );
       },
@@ -172,7 +254,9 @@ class UserHistoryList extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    item.patientId != null ? 'HN: ${item.patientId}' : 'General Patient',
+                    item.patientId != null && item.patientId != 'Unknown'
+                        ? 'HN: ${item.patientId}'
+                        : 'General Patient',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -204,7 +288,11 @@ class UserHistoryList extends StatelessWidget {
               ],
             ),
             const SizedBox(width: 8),
-            Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.black.withOpacity(0.1)), // เพิ่มไอคอนลูกศรให้รู้ว่ากดได้
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 12,
+              color: Colors.black.withOpacity(0.1),
+            ),
           ],
         ),
       ),

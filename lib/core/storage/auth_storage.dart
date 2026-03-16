@@ -1,9 +1,27 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 class AuthStorage {
-  static bool _loggedIn = false;
+  static const String _tokenKey = 'firebase_token';
+  static late SharedPreferences _prefs; 
 
-  static bool isLoggedIn() => _loggedIn;
+  static Future<void> init() async {
+    _prefs = await SharedPreferences.getInstance();
+  }
 
-  static void login() => _loggedIn = true;
+  static Future<void> saveToken(String token) async {
+    await _prefs.setString(_tokenKey, token);
+  }
 
-  static void logout() => _loggedIn = false;
+  static String? getToken() {
+    return _prefs.getString(_tokenKey);
+  }
+
+  static bool isLoggedIn() {
+    final token = _prefs.getString(_tokenKey);
+    return token != null && token.isNotEmpty; 
+  }
+
+  static Future<void> logout() async {
+    await _prefs.remove(_tokenKey);
+  }
 }

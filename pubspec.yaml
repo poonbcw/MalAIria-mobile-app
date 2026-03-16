@@ -16,17 +16,37 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   google_fonts: ^6.1.0
+  firebase_core: ^4.4.0
+  firebase_auth: ^6.1.4
+  google_sign_in: ^7.2.0
+  shared_preferences: ^2.5.4
+  http: ^1.6.0
+  tflite_flutter: ^0.12.1
+  image: ^4.8.0
+  flutter_riverpod: ^2.5.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1 
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/icon.png" 
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/images/
+    - assets/models/best_window_int8.tflite
+    - assets/models/best_256_2_25_am_int8.tflite
+    - assets/models/best_256_2_25_am_full_integer_quant.tflite
+    - assets/models/best_256_2_25_am_float32.tflite
+    - assets/models/best_256_2_25_am_float16.tflite
   fonts:
     - family: NotoSansThai
       fonts:

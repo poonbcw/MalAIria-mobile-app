@@ -1,9 +1,68 @@
+import 'dart:convert'; 
+import 'package:http/http.dart' as http; 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; 
+import 'package:google_sign_in/google_sign_in.dart'; 
 import '../../core/storage/auth_storage.dart';
-import '../dashboard/dashboard_page.dart';
+import '../../core/api/api_config.dart'; 
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
+
+  // --- ฟังก์ชันหลักสำหรับ Google Sign-In ---
+  Future<void> signInWithGoogle(BuildContext context) async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn.instance;
+      await googleSignIn.initialize();
+      
+      final GoogleSignInAccount? googleUser = await googleSignIn.authenticate();
+      
+      if (googleUser == null) return; 
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      final String? firebaseToken = await userCredential.user?.getIdToken();
+
+      if (firebaseToken != null) {
+        print("🎉 ล็อกอินสำเร็จ! ชื่อ: ${userCredential.user?.displayName}");
+        
+        // =================================================================
+        // 🚀 เพิ่มใหม่: ยิง API ไปบอก Backend ให้สร้าง User ลง Postgres
+        // =================================================================
+        try {
+          final url = Uri.parse('${ApiConfig.baseUrl}/api/auth/google');
+          final response = await http.post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'token': firebaseToken}),
+          );
+
+          if (response.statusCode == 200) {
+            print("✅ ซิงค์ข้อมูล User ลง Postgres เรียบร้อยแล้ว!");
+          } else {
+            print("❌ ซิงค์ข้อมูลล้มเหลว: ${response.statusCode} - ${response.body}");
+          }
+        } catch (e) {
+          print("❌ เชื่อมต่อ Backend ไม่ได้ตอน Sync User: $e");
+        }
+        // =================================================================
+        
+        // บันทึก Token ลงเครื่องแล้วพาไปหน้า Dashboard
+        await AuthStorage.saveToken(firebaseToken); 
+        
+        if (context.mounted) {
+          Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+        }
+      }
+    } catch (e) {
+      print("❌ เกิดข้อผิดพลาดในการล็อกอิน: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,7 +71,22 @@ class LoginPage extends StatelessWidget {
     final isSmallScreen = height < 700;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: const Color.fromARGB(255, 22, 27, 50),
+      // ✅ ให้เนื้อหาไหลทะลุไปอยู่หลัง AppBar (Layout จะได้ไม่เพี้ยน)
+      extendBodyBehindAppBar: true, 
+      
+      // ✅ เพิ่ม AppBar โปร่งใสพร้อมปุ่ม Back
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
+          onPressed: () {
+            Navigator.pop(context); // กดแล้วกลับไปหน้าเดิม (Dashboard)
+          },
+        ),
+      ),
+      
       body: SafeArea(
         bottom: false,
         child: LayoutBuilder(
@@ -24,13 +98,12 @@ class LoginPage extends StatelessWidget {
                   child: Column(
                     children: [
                       // --- HEADER ---
-                      // ปรับสัดส่วนให้ Header ดูโปร่งขึ้น
                       SizedBox(
                         height: isSmallScreen ? height * 0.38 : height * 0.42,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Spacer(flex: 2), // ดันโลโก้ลงมานิดหน่อย
+                            const Spacer(flex: 2),
                             Hero(
                               tag: 'app-logo',
                               child: Image.asset(
@@ -46,7 +119,7 @@ class LoginPage extends StatelessWidget {
                                 fontSize: isSmallScreen ? 22 : 24,
                                 fontWeight: FontWeight.w300,
                                 color: Colors.white,
-                                letterSpacing: 3.5, // เพิ่ม letter spacing ให้ดูพรีเมียม
+                                letterSpacing: 3.5,
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -69,20 +142,19 @@ class LoginPage extends StatelessWidget {
                           width: double.infinity,
                           padding: EdgeInsets.fromLTRB(
                             32,
-                            isSmallScreen ? 40 : 56, // เพิ่ม padding บนให้ดูโล่ง
+                            isSmallScreen ? 40 : 56,
                             32,
-                            48, // เพิ่ม padding ล่างเพื่อความสวยงาม
+                            48,
                           ),
                           decoration: const BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(44), // มนขึ้นเล็กน้อยเพื่อให้ดู Modern
+                              topLeft: Radius.circular(44),
                               topRight: Radius.circular(44),
                             ),
                           ),
                           child: Column(
                             children: [
-                              // Icon Indicator
                               Container(
                                 width: 56,
                                 height: 56,
@@ -114,23 +186,15 @@ class LoginPage extends StatelessWidget {
                                   color: Colors.grey[500],
                                 ),
                               ),
-                              
-                              const Spacer(), // ใช้ Spacer แทน SizedBox เพื่อให้ปุ่มจัดวางตามขนาดจอ
 
-                              // GOOGLE BUTTON
+                              const Spacer(),
+                              
+                              // --- GOOGLE BUTTON ---
                               SizedBox(
                                 width: double.infinity,
-                                height: 60, // ปรับปุ่มให้สูงขึ้นเพื่อให้กดง่ายและดูเต็ม
+                                height: 60,
                                 child: OutlinedButton(
-                                  onPressed: () {
-                                    AuthStorage.login();
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const DashboardPage(),
-                                      ),
-                                    );
-                                  },
+                                  onPressed: () => signInWithGoogle(context), 
                                   style: OutlinedButton.styleFrom(
                                     side: BorderSide(
                                       color: Colors.black.withOpacity(0.08),
@@ -161,8 +225,8 @@ class LoginPage extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              
-                              const Spacer(), // สร้างระยะห่างด้านล่างปุ่มให้สมดุล
+
+                              const Spacer(),
                             ],
                           ),
                         ),

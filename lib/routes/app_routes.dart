@@ -4,6 +4,7 @@ import '../features/dashboard/dashboard_page.dart';
 import '../features/auth/login_page.dart';
 import '../features/upload/upload_page.dart';
 import '../features/upload/result_page.dart';
+import '../features/profile/profile_page.dart';
 
 class AppRoutes {
   static const splash = '/';
@@ -11,6 +12,7 @@ class AppRoutes {
   static const upload = '/upload';
   static const login = '/login';
   static const result = '/result';
+  static const profile = '/profile';
 
 
   static final routes = <String, WidgetBuilder>{
@@ -19,6 +21,6 @@ class AppRoutes {
     upload: (_) => const UploadPage(),
     login: (_) => const LoginPage(),
     result: (_) => const ResultPage(),
-
+    profile: (_) => const ProfilePage(),
   };
 }
