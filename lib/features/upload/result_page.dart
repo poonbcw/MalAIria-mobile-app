@@ -213,19 +213,13 @@ class _ResultPageState extends State<ResultPage> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  if (fromHistory) {
-                    Navigator.pop(context);
-                  } else {
-                    Navigator.pushNamedAndRemoveUntil(
-                      context,
-                      '/dashboard', 
-                      (route) => false, 
-                    );
-                  }
+                  // 🟢 ปิดหน้านี้ทิ้งอย่างเดียวพอ เพื่อกลับไปเจอหน้า Dashboard 
+                  Navigator.pop(context); 
                 },
+                // 🟢 🟢 จัดการสีปุ่มตรงนี้ครับ 🟢 🟢
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Colors.white, // สีพื้นหลังปุ่ม
+                  foregroundColor: const Color.fromARGB(255, 22, 27, 50), // สีตัวหนังสือตอนกด
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
@@ -241,7 +235,6 @@ class _ResultPageState extends State<ResultPage> {
                 ),
               ),
             ),
-
             const SizedBox(height: 32),
           ],
         ),

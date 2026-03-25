@@ -5,6 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart'; 
 import '../../core/api/api_config.dart';
 import '../../core/services/ml_service.dart';
+// 🟢 Import เพิ่มสำหรับทำ Local DB และดักจับ Internet
+import '../../core/services/local_db_service.dart'; 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';  
 import 'dart:convert';
 
@@ -49,6 +52,34 @@ class AnalysisTask {
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
+
+  // 🟢 เพิ่มฟังก์ชันแปลง Object เป็น Map เพื่อเซฟลง SQLite
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'imagePath': image.path, 
+      'hn': hn ?? '',
+      'status': status.index,  
+      'isPositive': isPositive == true ? 1 : 0, 
+      'confidence': confidence ?? 0.0,
+      'boxes': boxes != null ? jsonEncode(boxes) : '[]', 
+      'errorMessage': errorMessage ?? '',
+    };
+  }
+
+  // 🟢 เพิ่มฟังก์ชันแปลง Map จาก SQLite กลับมาเป็น Object
+  factory AnalysisTask.fromMap(Map<String, dynamic> map) {
+    return AnalysisTask(
+      id: map['id'],
+      image: File(map['imagePath']),
+      hn: map['hn'] == '' ? null : map['hn'],
+      status: TaskStatus.values[map['status']],
+      isPositive: map['isPositive'] == 1,
+      confidence: map['confidence'],
+      boxes: jsonDecode(map['boxes']),
+      errorMessage: map['errorMessage'] == '' ? null : map['errorMessage'],
+    );
+  }
 }
 
 Future<Map<String, dynamic>> _runInferenceInIsolate(Map<String, dynamic> data) async {
@@ -62,18 +93,77 @@ Future<Map<String, dynamic>> _runInferenceInIsolate(Map<String, dynamic> data) a
 }
 
 class AnalysisQueueNotifier extends StateNotifier<List<AnalysisTask>> {
-  AnalysisQueueNotifier() : super([]);
+  AnalysisQueueNotifier() : super([]) {
+    _loadInitialTasks();    
+    _initNetworkListener(); 
+  }
 
   bool _isProcessingQueue = false;
 
-  void addTask(File image, String? hn) {
+  // 🟢 1. แก้ไข: เช็คสถานะ Guest ให้ครอบคลุมทั้ง null และแบบ Anonymous!
+  bool get _isGuest {
+    final user = FirebaseAuth.instance.currentUser;
+    return user == null || user.isAnonymous; // 👈 ดักผู้ใช้ชั่วคราวไว้ตรงนี้
+  }
+
+  Future<void> _loadInitialTasks() async {
+    if (_isGuest) return; 
+
+    try {
+      final tasksFromDB = await LocalDBService.getAllTasks();
+      final restoredTasks = tasksFromDB.map((t) {
+        if (t.status == TaskStatus.processing) {
+          return t.copyWith(status: TaskStatus.pending);
+        }
+        return t;
+      }).toList();
+
+      state = restoredTasks; 
+      if (state.any((t) => t.status == TaskStatus.pending)) {
+        _processNextTask();
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error loading initial tasks: $e');
+    }
+  }
+
+  void addTask(File image, String? hn) async { 
     final newTask = AnalysisTask(
       id: DateTime.now().millisecondsSinceEpoch.toString(), 
       image: image,
       hn: hn,
     );
+
+    if (!_isGuest) {
+      await LocalDBService.insertTask(newTask);
+    }
+
     state = [...state, newTask]; 
     _processNextTask();
+  }
+
+  void _initNetworkListener() {
+    Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
+      if (result == ConnectivityResult.mobile || result == ConnectivityResult.wifi) {
+        if (!_isGuest) { 
+          debugPrint('🌐 Internet is back! Starting Auto-Sync...');
+          _syncAllPendingTasks(); 
+        }
+      }
+    });
+  }
+
+  Future<void> _syncAllPendingTasks() async {
+    if (_isGuest) return; 
+
+    try {
+      final unsyncedTasks = await LocalDBService.getUnsyncedTasks();
+      for (var task in unsyncedTasks) {
+        await _attemptSync(task, task.isPositive ?? false, task.confidence ?? 0.0, 'YOLOv8');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error fetching unsynced tasks: $e');
+    }
   }
 
   Future<void> _processNextTask() async {
@@ -86,30 +176,28 @@ class AnalysisQueueNotifier extends StateNotifier<List<AnalysisTask>> {
     final targetTask = state[pendingTaskIndex];
 
     try {
-      _updateTask(targetTask.id, targetTask.copyWith(status: TaskStatus.processing));
+      final processingTask = targetTask.copyWith(status: TaskStatus.processing);
+      _updateTask(targetTask.id, processingTask);
+      
+      if (!_isGuest) {
+        await LocalDBService.insertTask(processingTask);
+      }
 
-      final ByteData byteData = await rootBundle.load('assets/models/best_window_int8.tflite');
+      final ByteData byteData = await rootBundle.load('assets/models/best_fold4.tflite');
       final Uint8List modelBytes = byteData.buffer.asUint8List();
 
-      // 🏃‍♂️ สั่ง AI รันใน Isolate
       final result = await compute(_runInferenceInIsolate, {
         'path': targetTask.image.path,
         'modelData': modelBytes, 
       });
       
-      // 🛑 [เพิ่มโค้ดส่วนนี้] 🛑 
-      // หลังจาก AI คิดเสร็จ ให้หันกลับมาเช็คว่าผู้ใช้กดยกเลิก (ลบ Task ออกจาก state) ไปหรือยัง?
       final taskStillExists = state.any((t) => t.id == targetTask.id);
-      if (!taskStillExists) {
-        debugPrint('🚫 Task ${targetTask.id} was cancelled by user. Discarding result.');
-        return; // ออกจากฟังก์ชันไปเลย ไม่ต้องส่งขึ้น Cloud และไม่ต้องอัปเดต UI!
-      }
-      // =======================
+      if (!taskStillExists) return;
 
       final bool isPositive = result['isPositive'];
       final double confidence = result['confidence'];
       final List<dynamic> boxes = result['boxes'];
-      final String fixedModelName = 'YOLOv8 (Offline)';
+      final String fixedModelName = 'YOLOv8';
 
       final completedTask = targetTask.copyWith(
         status: TaskStatus.completed,
@@ -118,13 +206,16 @@ class AnalysisQueueNotifier extends StateNotifier<List<AnalysisTask>> {
         boxes: boxes,
       );
 
-      // ถ้าไม่ถูกยกเลิก ก็ส่งขึ้น Cloud ตามปกติ
-      await _syncToCloud(completedTask, isPositive, confidence, fixedModelName);
-
       _updateTask(targetTask.id, completedTask);
 
+      if (_isGuest) {
+        debugPrint('👤 Guest Mode: Result shown on screen. No DB save. No Cloud sync.');
+      } else {
+        await LocalDBService.insertTask(completedTask);
+        await _attemptSync(completedTask, isPositive, confidence, fixedModelName);
+      }
+
     } catch (e) {
-      // ดัก error เผื่อไว้ แต่ถ้าถูกยกเลิกไปแล้วก็ไม่ต้องแสดง error ให้รกจอ
       if (state.any((t) => t.id == targetTask.id)) {
         _updateTask(targetTask.id, targetTask.copyWith(
           status: TaskStatus.error,
@@ -133,11 +224,14 @@ class AnalysisQueueNotifier extends StateNotifier<List<AnalysisTask>> {
       }
     } finally {
       _isProcessingQueue = false; 
-      _processNextTask(); // เรียกคิวต่อไปมารัน
+      _processNextTask(); 
     }
   }
 
-  Future<void> _syncToCloud(AnalysisTask task, bool isPositive, double confidence, String modelName) async {
+  Future<void> _attemptSync(AnalysisTask task, bool isPositive, double confidence, String modelName) async {
+    // 🟢 2. เพิ่มเกราะป้องกันชั้นที่ 2: ถ้าเป็น Guest ให้เด้งออกทันที ห้ามส่ง API เด็ดขาด!
+    if (_isGuest) return; 
+
     try {
       final url = Uri.parse('${ApiConfig.baseUrl}/api/upload');
       var request = http.MultipartRequest('POST', url);
@@ -158,9 +252,19 @@ class AnalysisQueueNotifier extends StateNotifier<List<AnalysisTask>> {
       }
 
       request.files.add(await http.MultipartFile.fromPath('image', task.image.path));
-      await request.send();
+      
+      final response = await request.send();
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await LocalDBService.deleteTask(task.id);
+        state = state.where((t) => t.id != task.id).toList();
+        debugPrint('✅ Task ${task.id} synced to Cloud and removed from UI & Local DB!');
+      } else {
+        debugPrint('⚠️ Server returned ${response.statusCode}, keeping task ${task.id} in Local DB.');
+      }
+
     } catch (e) {
-      debugPrint('⚠️ Cloud sync failed: $e');
+      debugPrint('⚠️ Cloud sync failed. Keeping task ${task.id} in Local DB. Error: $e');
     }
   }
 
@@ -168,7 +272,18 @@ class AnalysisQueueNotifier extends StateNotifier<List<AnalysisTask>> {
     state = state.map((task) => task.id == id ? updatedTask : task).toList();
   }
 
-  void removeTask(String id) {
+  void removeTask(String id) async { 
+    try {
+      final task = state.firstWhere((t) => t.id == id);
+      
+      if (!_isGuest && task.status != TaskStatus.completed) {
+        await LocalDBService.deleteTask(id);
+        debugPrint('🗑️ Cancelled task $id: Deleted from Local DB');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Task not found in state: $e');
+    }
+
     state = state.where((task) => task.id != id).toList();
   }
 }

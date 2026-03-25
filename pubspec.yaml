@@ -24,6 +24,9 @@ dependencies:
   tflite_flutter: ^0.12.1
   image: ^4.8.0
   flutter_riverpod: ^2.5.1
+  sqflite: ^2.3.0       
+  path_provider: ^2.1.2 
+  connectivity_plus: ^5.0.2 
 
 dev_dependencies:
   flutter_test:
@@ -42,11 +45,7 @@ flutter:
 
   assets:
     - assets/images/
-    - assets/models/best_window_int8.tflite
-    - assets/models/best_256_2_25_am_int8.tflite
-    - assets/models/best_256_2_25_am_full_integer_quant.tflite
-    - assets/models/best_256_2_25_am_float32.tflite
-    - assets/models/best_256_2_25_am_float16.tflite
+    - assets/models/best_fold4.tflite
   fonts:
     - family: NotoSansThai
       fonts:

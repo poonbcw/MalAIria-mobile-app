@@ -19,6 +19,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 🟢 🟢 🟢 เพิ่มบล็อกนี้: ดักฟังการอัปเดตของคิว 🟢 🟢 🟢
+    ref.listen<List<AnalysisTask>>(analysisQueueProvider, (previous, next) {
+      // ถ้าจำนวนคิวน้อยลง (แปลว่ามีงานส่งขึ้น Cloud สำเร็จและถูกลบออกไป)
+      if (previous != null && previous.length > next.length) {
+        setState(() {
+          _historyKey = UniqueKey(); // สั่งรีเฟรชให้ UserHistoryList ยิง API ใหม่ทันทีแบบเรียลไทม์
+        });
+      }
+    });
+    // =========================================================
+
     final bool isLoggedIn = AuthStorage.isLoggedIn();
     
     final queueTasks = ref.watch(analysisQueueProvider);
@@ -180,7 +191,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 'confidence': task.confidence, 
                 'boxes': task.boxes, 
               });
-              ref.read(analysisQueueProvider.notifier).removeTask(task.id);
+              
+              // 🟢 ลบบรรทัด removeTask ออกไปเลยครับ!
+              // ให้การซิงค์ข้อมูล (Auto-Sync) เป็นคนจัดการลบการ์ดใบนี้แทนเวลาเน็ตมา
+              
               setState(() { _historyKey = UniqueKey(); });
             }
           : null,

@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data'; // ✅ สำหรับจัดการข้อมูล Bytes
+import 'dart:typed_data'; 
 import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:flutter/foundation.dart';
@@ -20,14 +20,13 @@ class BoundingBox {
 class MLService {
   Interpreter? _interpreter;
   
-  final List<String> labels = ["normal", "abnormal"];
-  final double confidenceThreshold = 0.10; 
-  final double iouThreshold = 0.20;        
+  // 🟢 1. แก้ไข: เพิ่มคลาสที่ 3 เข้าไปให้ครบ (ป้องกันแอปพังตอนดึง Index)
+  final List<String> labels = ["normal", "abnormal", "background"]; 
+  final double confidenceThreshold = 0.20; 
+  final double iouThreshold = 0.40;        
   final int windowSize = 640;
   final int stride = 320;
 
-  // ✅ โหลดโมเดลจากก้อนข้อมูล (Bytes) ที่ส่งเข้ามา
-  // วิธีนี้ปลอดภัย 100% สำหรับการใช้ใน Isolate ทุกรุ่น
   Future<void> initModelFromBuffer(Uint8List modelBuffer) async {
     try {
       var options = InterpreterOptions();
@@ -36,6 +35,14 @@ class MLService {
         options: options,
       );
       debugPrint('✅ TFLite Model Loaded From Buffer Successfully');
+      
+      var inputTensor = _interpreter!.getInputTensor(0);
+      debugPrint('ℹ️ Model Input Shape: ${inputTensor.shape}');
+      debugPrint('ℹ️ Model Input Type: ${inputTensor.type}');
+      
+      var outputTensor = _interpreter!.getOutputTensor(0);
+      debugPrint('ℹ️ Model Output Shape: ${outputTensor.shape}');
+      
     } catch (e) {
       debugPrint('❌ Model Load from Buffer Failed: $e');
     }
@@ -50,6 +57,17 @@ class MLService {
 
     int imgWidth = oriImage.width;
     int imgHeight = oriImage.height;
+
+    // 🟢 2. แก้ไข: ดักจับกรณีที่ภาพต้นฉบับเล็กกว่า 640 ให้ขยายภาพก่อน (ป้องกันกรอบหลุดขอบ)
+    if (imgWidth < windowSize || imgHeight < windowSize) {
+      oriImage = img.copyResize(oriImage, 
+        width: max(imgWidth, windowSize), 
+        height: max(imgHeight, windowSize)
+      );
+      imgWidth = oriImage.width;
+      imgHeight = oriImage.height;
+    }
+
     List<BoundingBox> allGlobalBoxes = [];
 
     if (imgWidth <= windowSize && imgHeight <= windowSize) {
@@ -78,6 +96,7 @@ class MLService {
     List<List<double>> detectedBoxes = []; 
 
     for (var box in finalBestBoxes) {
+      // โค้ดตรงนี้จะทำงานก็ต่อเมื่อชื่อคลาสเป็น abnormal (คลาส normal และ background จะถูกข้ามไป)
       if (box.clsName == "abnormal") {
         isPositive = true; 
         if (box.maxConf > maxConfidence) maxConfidence = box.maxConf;
@@ -96,7 +115,8 @@ class MLService {
     var input = List.generate(1, (i) =>
         List.generate(windowSize, (y) =>
             List.generate(windowSize, (x) {
-              final pixel = cropImage.getPixel(x, y);
+              // 🟢 3. แก้ไข: เปลี่ยนไปใช้ getPixelSafe เพื่อรับประกันว่าจะไม่มีทางอ่านข้อมูลพิกเซลเกินขนาดภาพ
+              final pixel = cropImage.getPixelSafe(x, y);
               return [pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0];
             })));
 
