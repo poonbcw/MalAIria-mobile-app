@@ -185,7 +185,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ? () async { 
               await Navigator.pushNamed(context, AppRoutes.result, arguments: {
                 'image': task.image.path, 
-                'model': 'YOLOv8 (Offline)', 
+                'model': 'YOLOv8', 
                 'hn': task.hn,
                 'positive': task.isPositive, 
                 'confidence': task.confidence, 
